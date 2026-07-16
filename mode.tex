@@ -1,0 +1,391 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amsfonts,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{geometry}
+\geometry{margin=1in}
+\definecolor{zenblue}{RGB}{41,121,255}
+\definecolor{codegray}{RGB}{245,245,245}
+\hypersetup{colorlinks=true,linkcolor=zenblue,urlcolor=zenblue,citecolor=zenblue}
+\lstset{basicstyle=\ttfamily\small,backgroundcolor=\color{codegray},frame=none,
+        breaklines=true,columns=fullflexible,xleftmargin=1em}
+
+\title{\textbf{MoDE: Mixture of Diverse Experts}\\
+\large Complexity-Aware Routing over Frozen, Device-Pinned Experts\\
+Harvested from Open Models}
+\author{Zen LM Research, Hanzo AI\\
+\texttt{research@hanzo.ai}}
+\date{2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We present MoDE (Mixture of Diverse Experts), the architecture underlying zen5. MoDE
+inverts the economics of frontier training: rather than train experts, it \emph{harvests}
+them. Expert modules are extracted from the largest open-weight models available---six
+architecturally distinct families---and served frozen. The only trained parameters are a
+complexity estimator, a cross-architecture alignment layer, and a per-tier router:
+$\sim$394M, or 0.013\% of the assembled $\sim$3.1T pool. A hierarchical router estimates
+task difficulty from a prompt's first tokens and activates only the tier that task
+warrants, so a greeting costs 0.8B active parameters and a proof costs 100B+.
+
+The second half of this paper addresses what a 3.1T pool actually requires to run:
+\emph{placement}. Because harvested experts are frozen, a pinned expert is a pure
+function that is permanently resident on one device---it never syncs, holds no optimizer
+state, and never reloads. We show that this makes expert placement a static value rather
+than a scheduling problem, and that it extends the kernel-fusion algebra by exactly one
+class. Where the existing algebra classes an operation as \textsc{Map} (composes) or
+\textsc{Reduce} (fences within a device), MoDE adds \textsc{Route} (fences \emph{across}
+devices). The same rule that makes fusion decidable then makes placement decidable.
+Evaluation is in progress; we publish no numbers we have not measured.
+\end{abstract}
+
+\section{Introduction}
+
+Scaling a frontier model conventionally means training one: a single architecture, one
+pretraining run, and a compute bill that grows with parameter count. Mixture-of-Experts
+reduces the \emph{inference} cost of that model by activating a subset of its parameters,
+but the experts are still trained together, from scratch, within one family.
+
+The open-weight ecosystem now offers a different opportunity. Several organizations have
+each spent enormous compute training large models with genuinely different inductive
+biases---Gated DeltaNet, Lightning Attention, GLM MoE, DeepseekV3-style MoE, FP8 MoE.
+Those weights are published. The expensive artifact---a trained expert---already exists;
+what is missing is a way to use experts from different families \emph{together}.
+
+MoDE is that mechanism. It treats published models as an \textbf{expert pool} to be
+harvested, not a baseline to be beaten, and trains only the machinery needed to route
+across them:
+
+\begin{enumerate}
+  \item \textbf{Diverse, not distilled.} Experts are taken \emph{as-is} from six model
+        families and never fine-tuned. Their diversity is the point: models trained by
+        different groups, on different data, with different attention mechanisms learn
+        different representations, and a router can exploit that.
+  \item \textbf{Complexity-aware routing.} A lightweight estimator predicts task
+        difficulty from the first 64 tokens and selects a tier. Standard MoE routes every
+        token through the same-size network; MoDE varies the network.
+  \item \textbf{Frozen experts, tiny trainable surface.} $\sim$394M trained parameters
+        against a $\sim$3.1T pool---two to three orders of magnitude less training compute
+        than pretraining a model of comparable capability.
+  \item \textbf{Pinned placement.} Frozen experts are pinned to devices. Residency is
+        paid once; routing is then an address, not a schedule.
+\end{enumerate}
+
+\section{Expert Pool}
+
+Experts are harvested from open-weight models spanning six text families and four
+additional modalities. Each source contributes its FFN/MoE blocks; weights are frozen at
+extraction and never updated.
+
+\begin{table}[H]
+\centering
+\caption{Text expert sources. Tier is the complexity band the source serves.}
+\begin{tabular}{llrrl}
+\toprule
+\textbf{Source} & \textbf{Architecture} & \textbf{Total} & \textbf{Active} & \textbf{Tier} \\
+\midrule
+Qwen3.5-0.8B & Gated DeltaNet (dense)       & 0.8B  & 0.8B & T0 --- trivial \\
+Qwen3.5-9B   & Gated DeltaNet (dense)       & 9B    & 9B   & T1 --- standard \\
+MiniMax-M2.5 & Lightning Attention MoE      & 230B  & 10B  & T2 --- complex \\
+GLM-5        & GLM MoE                      & 744B  & 40B  & T3 --- advanced \\
+Kimi K2.5    & DeepseekV3 MoE (384 experts) & 1.04T & 32B  & T4 --- frontier \\
+Ling-1T      & FP8 MoE                      & 1T    & 50B  & T4 --- frontier \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Multimodal expert sources.}
+\begin{tabular}{lllr}
+\toprule
+\textbf{Modality} & \textbf{Source} & \textbf{Architecture} & \textbf{Total} \\
+\midrule
+Vision & Qwen3-VL-30B          & Vision-language transformer   & 30B \\
+Video  & Wan2.2                & MoE diffusion (3D causal VAE) & $\sim$14B \\
+Video  & CogVideoX-5B          & Expert transformer + 3D-RoPE  & 5B \\
+3D     & TRELLIS.2 (Microsoft) & Rectified flow DiT + SC-VAE   & 4B \\
+Audio  & Qwen3-Omni            & Thinker--Talker omni MoE      & 30B \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The assembled pool is $\sim$3.1T total parameters across 1000+ experts, of which at most
+$\sim$189B are active on any request. Every source is used under its own license and
+credited, with that license, in \texttt{NOTICE}.
+
+\section{Complexity-Aware Hierarchical Routing}
+
+\subsection{The estimator}
+
+Standard MoE applies the same computation to every token: a linear router selects top-$K$
+experts from one pool, and depth is fixed whether the prompt is a greeting or a research
+question. MoDE first asks how hard the task is.
+
+A 207M-parameter estimator reads the first 64 tokens and predicts a tier
+$t \in \{T0,\dots,T4\}$. Only that tier's experts are activated.
+
+\begin{table}[H]
+\centering
+\caption{Complexity tiers and their activation budget.}
+\begin{tabular}{llll}
+\toprule
+\textbf{Tier} & \textbf{Active} & \textbf{Latency target} & \textbf{Example} \\
+\midrule
+T0 & 0.8B      & $<$50ms  & ``Hello, how are you?'' \\
+T1 & 9B        & $<$200ms & ``Summarize this article'' \\
+T2 & 10--40B   & $<$2s    & ``Compare Keynesian vs.\ monetarist economics'' \\
+T3 & 40--80B   & $<$5s    & ``Derive Black--Scholes from first principles'' \\
+T4 & 80--100B+ & $<$10s   & ``Design a novel consensus algorithm'' \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The estimator is deliberately small: it must be cheap enough that running it on every
+request is free relative to the compute it saves.
+
+\subsection{Cross-architecture alignment}
+
+Experts from different families do not share a representation space. A 134M-parameter
+alignment layer projects each source's hidden states into a shared space, which is what
+permits a Gated DeltaNet expert and a DeepseekV3 MoE expert to serve the same request.
+
+\subsection{Router and escalation}
+
+The 52M-parameter router performs per-tier expert selection, adopting two published
+results rather than reinventing them: \textbf{ReMoE} ReLU routing (ICLR 2025) for an
+adaptive expert count per token instead of a fixed top-$K$, and \textbf{MoE++}
+zero-computation experts (ICLR 2025, oral)---zero, copy, and constant experts that let
+trivial tokens bypass FFN compute, reported upstream at 1.1--2.1$\times$ throughput.
+
+A tier chosen from 64 tokens can be wrong. When generation confidence drops below
+threshold, MoDE promotes the request mid-generation to a higher tier. The estimator need
+not be right, only cheap and approximately right; escalation makes its error recoverable
+rather than fatal.
+
+\section{Trainable Surface}
+
+\begin{table}[H]
+\centering
+\caption{Trained parameters. Everything else is frozen.}
+\begin{tabular}{lrl}
+\toprule
+\textbf{Component} & \textbf{Parameters} & \textbf{Role} \\
+\midrule
+ComplexityEstimator & 207M & Predicts the task's tier \\
+AlignmentLayer      & 134M & Projects diverse architectures to a shared space \\
+MoDERouter          & 52M  & Per-tier expert routing (ReLU gating) \\
+\midrule
+\textbf{Total} & \textbf{$\sim$394M} & \textbf{0.013\% of the $\sim$3.1T pool} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This is the central economic claim, and it follows from the design rather than from a
+measurement: if the experts are frozen and already trained, the training cost of the
+assembled model is the training cost of the router.
+
+\section{Placement: Pinned Experts}
+
+A 3.1T pool does not fit on a device. The question is not whether to distribute it but
+what distribution \emph{costs}, and here the frozen-ness of harvested experts pays a
+second time.
+
+\subsection{Frozen implies pinnable}
+
+In conventional distributed training an expert is a liability: its weights change every
+step, so it carries gradients and optimizer state, must be synchronized, and its
+placement interacts with the training schedule. A MoDE expert changes never. That single
+fact collapses the problem:
+
+\begin{itemize}
+  \item \textbf{No sync.} A frozen expert has no gradient and no optimizer state. Nothing
+        about it needs to travel between devices, ever.
+  \item \textbf{Residency is paid once.} Weights are loaded at extraction time and stay.
+        There is no reload, no checkpoint restore into the hot path, no eviction pressure
+        from an optimizer.
+  \item \textbf{An expert is a pure function.} A frozen expert pinned to device $d$ is a
+        deterministic map from an aligned hidden state to an aligned hidden state. It has
+        no identity beyond its weights and no state beyond its input.
+\end{itemize}
+
+Placement is therefore a \textbf{value}, not a schedule: a static map
+$\pi : \text{expert} \rightarrow \text{device}$, decided once and shared read-only. A
+router that emits an expert id has, by composition with $\pi$, emitted an address. There
+is no placement \emph{policy} at runtime to get wrong, because there is no decision left
+to make.
+
+\subsection{What pins where}
+
+Tiering and placement compose. The T0/T1 experts are small dense models (0.8B, 9B); they
+are cheap enough to replicate on \emph{every} device, so the overwhelmingly common case
+---a trivial or standard request---is served with zero device hops. The large MoE sources
+(T2--T4) are sharded across the fleet, and only the rare hard request pays a crossing.
+
+\begin{table}[H]
+\centering
+\caption{Placement policy by tier. Replication is an optimization the frozen weights make free.}
+\begin{tabular}{llll}
+\toprule
+\textbf{Tier} & \textbf{Source} & \textbf{Placement} & \textbf{Hops} \\
+\midrule
+T0/T1   & Qwen3.5-0.8B / 9B (dense) & Replicated per device & 0 \\
+T2--T4  & MiniMax / GLM-5 / Kimi / Ling (MoE) & Sharded, pinned & 1 per crossing \\
+Modal   & VL / video / 3D / audio & Pinned to modality hosts & 0--1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Because the distribution of real traffic is dominated by the cheap tiers, the expected
+number of crossings per request is far below one---the fleet behaves like a small model
+that occasionally consults a large one.
+
+\subsection{Pinned and streamed are the same map}
+
+Not every deployment has fleet-scale memory. A device may hold its pinned set resident
+and stream the remainder from disk through an expert cache, which is viable precisely
+because frozen weights are immutable and therefore trivially cacheable---a page of expert
+weights is valid forever. Pinned and streamed are then not two systems but two
+\emph{residency classes} under one placement map: $\pi$ says which device owns an expert;
+residency says how fast that device can produce it.
+
+\section{The Fusion Algebra: Map, Reduce, Route}
+
+MoDE's serving requirements extend the kernel DSL (\texttt{hanzo-kernel}) by exactly one
+class, and the extension is forced rather than designed.
+
+\subsection{The existing law}
+
+The DSL classes each operation by how it composes, and derives fusion from the class
+alone---not from a pattern matcher over concrete operations:
+
+\begin{itemize}
+  \item \textbf{Map} --- index-local. $\text{map}(g) \circ \text{map}(f) = \text{map}(g
+        \circ f)$. Map regions fuse into one kernel.
+  \item \textbf{Reduce} --- row-local. Output depends on a whole row, so it is a
+        \emph{fence}: fusion stops.
+\end{itemize}
+
+Fusion is decidable because the class, not the operation, decides it.
+
+\subsection{The forced third class}
+
+A MoDE expert is a Map region: an FFN chain (SwiGLU is $\text{silu}(xW_g) \odot xW_u$
+followed by $W_d$) is pointwise between contractions, so within one expert the existing
+algebra already fuses everything fusable. But an expert is Map \emph{on its own device}.
+Routing a row to expert $e$ pinned at $\pi(e)$ is index-local in the same sense a Map is
+---it depends on that row alone---yet it cannot fuse with its neighbours, because they may
+compute somewhere else.
+
+That is a fence, but not a contraction fence. It is a \textbf{placement fence}:
+
+\begin{itemize}
+  \item \textbf{Map} --- index-local, same device. Composes.
+  \item \textbf{Reduce} --- row-local, same device. Fences \emph{within} a device.
+  \item \textbf{Route} --- expert-local, possibly other device. Fences \emph{across}
+        devices.
+\end{itemize}
+
+\lstset{caption={The class extension. Route is a fence like Reduce, distinguished by what it crosses.}}
+\begin{lstlisting}
+pub enum Class {
+    Map,     // index-local  -> composes
+    Reduce,  // row-local    -> fences (contraction)
+    Route,   // expert-local -> fences (placement)
+}
+\end{lstlisting}
+
+The consequence is that placement becomes decidable by the rule that already makes fusion
+decidable. A trace is partitioned at its fences; \textsc{Reduce} fences split a kernel,
+\textsc{Route} fences split a \emph{device}. Each resulting Map region is a fused kernel
+that runs entirely on one device, and the device is $\pi(e)$ of the region's expert. The
+scheduler does not need to understand experts, and the fuser does not need to understand
+devices; both only read the class.
+
+\subsection{Why this is the right seam}
+
+The alternative---teaching the fuser about experts, or the router about kernels---braids
+two concerns that have no reason to know each other. Classing \textsc{Route} keeps them
+orthogonal: routing changes which region runs where, fusion changes what a region costs,
+and neither changes the other's rules. Adding a seventh expert family adds rows to $\pi$
+and nothing to the fuser. Adding a fusable op adds a variant to \texttt{UnOp} and nothing
+to the router.
+
+\subsection{Training under the same algebra}
+
+Training uses the identical partition, which is what makes the trainable surface cheap to
+train as well as small. The experts are frozen, so no \textsc{Route}-fenced region ever
+requires a backward pass: gradients flow only through the alignment layer and the router,
+both of which are Map/Reduce regions on the device that hosts them. The backward graph is
+therefore a strict subgraph of the forward graph with every \textsc{Route} region cut out
+---which is the algebraic statement of ``we train 0.013\% of the model.''
+
+\section{Training}
+
+\begin{enumerate}
+  \item \textbf{Expert extraction} --- harvest FFN/MoE blocks from each source model.
+  \item \textbf{Alignment pre-training} --- learn the cross-architecture projections.
+  \item \textbf{Router training} --- train the complexity estimator and per-tier routers.
+  \item \textbf{Integration} --- joint fine-tuning of the trainable surface, experts frozen.
+  \item \textbf{Omnimodal fusion} --- add the vision, video, 3D, and audio experts.
+\end{enumerate}
+
+Hanzo's contribution on top of the harvested experts is confined to identity training,
+agentic-data fine-tuning, and abliteration. The experts' capabilities are the source
+models' own, and we claim none of them.
+
+\section{Lineup}
+
+\begin{table}[H]
+\centering
+\caption{zen5 configurations. Active parameters are a range because the tier is chosen per request.}
+\begin{tabular}{lrll}
+\toprule
+\textbf{Model} & \textbf{Total} & \textbf{Active} & \textbf{Target} \\
+\midrule
+zen5       & 750B & 0.8--50B   & General \\
+zen5-coder & 1.8T & 0.8--80B   & Code \\
+zen5-omni  & 2.5T & 0.8--100B  & Omnimodal \\
+zen5-max   & 3.1T & 0.8--100B+ & Frontier \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Evaluation}
+
+Evaluation is in progress. Routing accuracy, per-tier latency, crossing rate under real
+traffic, and end-task quality are measured by \texttt{scripts/benchmark.py} in the zen5
+repository and will be reported when the numbers are real. We publish none here. The
+architecture's claims---frontier capability at router-training cost, and sub-unity
+expected crossings per request---are worth testing honestly, and a fabricated table would
+only obscure whether they hold.
+
+\section{Related Work}
+
+MoDE builds directly on published results: ReMoE (ICLR 2025) for ReLU-gated adaptive
+expert counts, MoE++ (ICLR 2025, oral) for zero-computation experts, and Transfusion for
+unified autoregressive and diffusion modeling in one architecture. Model merging and
+FrankenMoE assemblies also combine published checkpoints, but they merge weights into a
+single homogeneous model; MoDE keeps the sources distinct, aligned rather than averaged,
+and selects among them per request. Its novelty is the composition: cross-architecture
+experts harvested from independently trained open models, made interoperable by a learned
+alignment, selected by a complexity estimator that varies compute with task difficulty,
+and pinned so that selection and placement are the same decision. We are not aware of an
+existing model that combines these.
+
+\section*{Availability}
+
+Architecture, extraction, and router-training code: \url{https://github.com/zenlm/zen5}.
+Kernel DSL and the Map/Reduce/Route partition: \url{https://github.com/hanzoai/ml}
+(\texttt{hanzo-kernel}). Each harvested source is credited, with its license, in
+\texttt{NOTICE}.
+
+\end{document}
