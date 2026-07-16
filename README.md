@@ -5,12 +5,39 @@
 | **v1** | Mixture of *Distilled* Experts | Upcycled from our own dense checkpoints ([Drop-Upcycling](https://arxiv.org/abs/2502.19261)) | superseded |
 | **v2** | Mixture of *Diverse* Experts | Harvested frozen from open models | [zen5](https://github.com/zenlm/zen5) |
 | **v3** | Mixture of *Diverse* Experts | Harvested frozen; hypermodal; Rust-native | this repo |
+| **v4** | **DiT-MoDE** | Harvested **and** upcycled (diffusion experts) | planned — [enso](https://github.com/zenlm/enso) max |
 
 v1 taught that expert **diversity must be engineered** — identical experts get identical
 gradients and never differentiate. v2 took that to its conclusion: the strongest available
 diversity isn't noise injected into copies of one model, it's experts from models independently
 trained by different groups on different data. *Upcycling manufactures diversity; harvesting
 finds it already made.*
+
+**v4 brings v1 back**, because the two answer different questions. Harvesting works when an
+ecosystem already trained the diversity — six open frontier text families exist, so we take them.
+No comparable pool of open frontier DiT-MoEs exists to take, so there diversity must be
+manufactured. The rule is symmetric:
+
+> **Harvest where diversity already exists; upcycle where it does not.**
+
+DiT-MoDE does both in one model: upcycle the DiT into a diffusion expert pool, harvest the text
+and encoder experts, route across the union. Diffusion and autoregressive generation then differ
+only in *which experts a request routes to* — a `Route` fence doesn't care what its region
+computes.
+
+**It's also a collapse.** The diffusion line ([enso](https://github.com/zenlm/enso)) reached the
+same idea from the other side and called it **MUEN** (Mixture of *Unbound* Experts); enso then
+became the routing work itself. MoDE and MUEN are one architecture under two names — *route across
+experts too diverse to have been trained together* — found once from text, once from diffusion.
+v4 keeps one name and one implementation.
+
+Perception enters through the same seam: JEPA-family encoders ([V-JEPA 2](https://github.com/zenlm/vjepa2))
+and the jin multimodal framework are `Route` targets like any other expert. "Hypermodal" needs no
+new mechanism — **an encoder is just an expert whose modality differs**.
+
+### enso's own arc
+`diffusion (DiT-MoE)` → `router` → `DiT-MoDE` — it started as diffusion-with-experts, became the
+router, and its final form re-fuses diffusion into the routed architecture. **enso max** is the target.
 
 The architecture behind [zen5](https://github.com/zenlm/zen5): route across expert
 modules **harvested frozen** from the largest open-weight models, with
