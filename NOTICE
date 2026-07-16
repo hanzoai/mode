@@ -1,0 +1,57 @@
+MoDE — Mixture of Diverse Experts
+Copyright (c) 2026 Hanzo AI, Inc.
+
+MoDE routes across expert modules harvested from open-weight models. The experts are
+those models' own trained weights, used frozen and unmodified, under their own licenses.
+Their capabilities are their authors' work, not ours. Hanzo's contribution is the
+complexity estimator, the cross-architecture alignment layer, the router, and the
+identity/agentic/abliteration training applied on top.
+
+Text expert sources
+-------------------
+  Qwen3.5 (0.8B, 9B) — Gated DeltaNet
+    Alibaba Cloud / Qwen — https://github.com/QwenLM
+    Apache-2.0
+
+  MiniMax-M2.5 — Lightning Attention MoE
+    MiniMax — https://huggingface.co/MiniMaxAI
+    Refer to the model's published license
+
+  GLM-5 — GLM MoE
+    Z.ai / Zhipu AI — https://huggingface.co/zai-org
+    MIT
+
+  Kimi K2.5 — DeepseekV3-style MoE
+    Moonshot AI — https://huggingface.co/moonshotai
+    Refer to the model's published license
+
+  Ling-1T — FP8 MoE
+    InclusionAI / Ant Group — https://huggingface.co/inclusionAI
+    Refer to the model's published license
+
+Multimodal expert sources
+-------------------------
+  Qwen3-VL, Qwen3-Omni — vision, audio
+    Alibaba Cloud / Qwen — https://github.com/QwenLM
+    Refer to each model's published license
+
+  Wan2.2 — video (MoE diffusion)
+    Wan-AI / Alibaba — https://huggingface.co/Wan-AI
+    Apache-2.0
+
+  CogVideoX-5B — video
+    THUDM / Zhipu AI — https://github.com/THUDM/CogVideo
+    Refer to the model's published license
+
+  TRELLIS.2 — 3D (rectified flow DiT + SC-VAE)
+    Microsoft — https://github.com/microsoft/TRELLIS
+    MIT
+
+Published results this architecture builds on
+---------------------------------------------
+  ReMoE: Fully Differentiable Mixture-of-Experts with ReLU Routing (ICLR 2025)
+  MoE++: Accelerating Mixture-of-Experts Methods with Zero-Computation Experts (ICLR 2025, oral)
+  Transfusion: Predict the Next Token and Diffuse Images with One Multi-Modal Model
+
+Before redistributing any harvested expert weights, verify that source's license terms
+directly. This NOTICE records provenance; it does not grant rights.
