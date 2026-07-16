@@ -16,7 +16,7 @@
 \lstset{basicstyle=\ttfamily\small,backgroundcolor=\color{codegray},frame=none,
         breaklines=true,columns=fullflexible,xleftmargin=1em}
 
-\title{\textbf{MoDE: Mixture of Diverse Experts}\\
+\title{\textbf{MoDE v3: Mixture of Diverse Experts}\\
 \large Complexity-Aware Routing over Frozen, Device-Pinned Experts\\
 Harvested from Open Models}
 \author{Zen LM Research, Hanzo AI\\
@@ -27,7 +27,7 @@ Harvested from Open Models}
 \maketitle
 
 \begin{abstract}
-We present MoDE (Mixture of Diverse Experts), the architecture underlying zen5. MoDE
+We present MoDE v3 (Mixture of Diverse Experts), the architecture underlying zen5. MoDE
 inverts the economics of frontier training: rather than train experts, it \emph{harvests}
 them. Expert modules are extracted from the largest open-weight models available---six
 architecturally distinct families---and served frozen. The only trained parameters are a
@@ -46,6 +46,42 @@ class. Where the existing algebra classes an operation as \textsc{Map} (composes
 devices). The same rule that makes fusion decidable then makes placement decidable.
 Evaluation is in progress; we publish no numbers we have not measured.
 \end{abstract}
+
+\section*{Lineage}
+
+MoDE has three versions, and they differ in where the experts come from.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{llll}
+\toprule
+& \textbf{Name} & \textbf{Where experts come from} & \textbf{Status} \\
+\midrule
+v1 & Mixture of \emph{Distilled} Experts & Upcycled from our own dense checkpoints & Superseded \\
+v2 & Mixture of \emph{Diverse} Experts    & Harvested frozen from open models      & zen5 \\
+v3 & Mixture of \emph{Diverse} Experts    & Harvested frozen; hypermodal; native   & This paper \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{v1} (2026) applied Drop-Upcycling~\cite{dropupcycling}: clone a trained dense FFN into $N$
+experts and inject structured noise to break the symmetry that otherwise collapses them back into
+one, at roughly a quarter the cost of training an MoE from scratch. The insight it contributed ---
+that expert \emph{diversity} must be engineered, because identical experts receive identical
+gradients and never differentiate --- is the premise v2 inherited and took to its conclusion: if
+diversity is what matters, the strongest available diversity is not noise injected into copies of
+one model, but experts drawn from models that were independently trained by different groups, on
+different data, with different attention mechanisms. Upcycling manufactures diversity; harvesting
+finds it already made.
+
+\textbf{v2} established that architecture (zen5): harvest frozen, align, route by complexity.
+\textbf{v3}, this paper, keeps v2's algebra and adds two things: placement as a first-class value
+(Section~5) with the Map/Reduce/Route partition that follows from it (Section~6), and a hypermodal
+router that selects encoders and decoders per modality rather than only FFN experts.
+
+We record v1 rather than quietly drop it. An architecture line that erases its own supersessions
+cannot be audited, and the reason v2 exists is legible only against what v1 taught.
+
 
 \section{Introduction}
 
@@ -370,9 +406,11 @@ only obscure whether they hold.
 
 \section{Related Work}
 
-MoDE builds directly on published results: ReMoE (ICLR 2025) for ReLU-gated adaptive
-expert counts, MoE++ (ICLR 2025, oral) for zero-computation experts, and Transfusion for
-unified autoregressive and diffusion modeling in one architecture. Model merging and
+MoDE builds directly on published results: Drop-Upcycling~\cite{dropupcycling}, which v1 was
+built on and whose diagnosis of weight-correlation collapse motivates harvesting; ReMoE
+(ICLR 2025) for ReLU-gated adaptive expert counts; MoE++ (ICLR 2025, oral) for zero-computation
+experts; and Transfusion for unified autoregressive and diffusion modeling in one
+architecture. Model merging and
 FrankenMoE assemblies also combine published checkpoints, but they merge weights into a
 single homogeneous model; MoDE keeps the sources distinct, aligned rather than averaged,
 and selects among them per request. Its novelty is the composition: cross-architecture
@@ -387,5 +425,11 @@ Architecture, extraction, and router-training code: \url{https://github.com/zenl
 Kernel DSL and the Map/Reduce/Route partition: \url{https://github.com/hanzoai/ml}
 (\texttt{hanzo-kernel}). Each harvested source is credited, with its license, in
 \texttt{NOTICE}.
+
+\begin{thebibliography}{9}
+\bibitem{dropupcycling}
+Drop-Upcycling: Training Sparse Mixture of Experts with Partial Re-initialization.
+\url{https://arxiv.org/abs/2502.19261}
+\end{thebibliography}
 
 \end{document}
