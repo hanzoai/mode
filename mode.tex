@@ -3,7 +3,7 @@
 \usepackage[T1]{fontenc}
 \usepackage{amsmath,amsfonts,amssymb}
 \usepackage{graphicx}
-\usepackage{hyperref}
+\usepackage[hypertexnames=false]{hyperref}
 \usepackage{listings}
 \usepackage{color}
 \usepackage{booktabs}
@@ -49,7 +49,7 @@ Evaluation is in progress; we publish no numbers we have not measured.
 
 \section*{Lineage}
 
-MoDE has three versions, and they differ in where the experts come from.
+MoDE has four versions, and they differ in where the experts come from. This paper is v3.
 
 \begin{table}[H]
 \centering
@@ -60,7 +60,7 @@ MoDE has three versions, and they differ in where the experts come from.
 v1 & Mixture of \emph{Distilled} Experts & Upcycled from our own dense checkpoints & Superseded \\
 v2 & Mixture of \emph{Diverse} Experts    & Harvested frozen from open models      & zen5 \\
 v3 & Mixture of \emph{Diverse} Experts    & Harvested frozen; hypermodal; native   & This paper \\
-v4 & DiT-MoDE                              & Harvested \emph{and} upcycled (diffusion) & Planned (enso max) \\
+v4 & MUEN / DiT-MoDE                       & Harvested \emph{and} upcycled (diffusion) & \cite{muen} (enso max) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -80,9 +80,9 @@ finds it already made.
 (Section~5) with the Map/Reduce/Route partition that follows from it (Section~6), and a hypermodal
 router that selects encoders and decoders per modality rather than only FFN experts.
 
-\textbf{v4} (planned, \emph{DiT-MoDE}) returns to v1's technique rather than retiring it, because
-the two methods answer different questions. Harvesting works when an ecosystem has already trained
-the diversity: six independently-trained frontier text families exist, so MoDE takes them. No
+\textbf{v4} (\emph{MUEN} / DiT-MoDE) returns to v1's technique rather than retiring it, because the
+two methods answer different questions. Harvesting works when an ecosystem has already trained the
+diversity: six independently-trained frontier text families exist, so MoDE takes them. No
 comparable pool of open frontier diffusion-transformer MoEs exists to take. Where diversity has not
 been trained by someone else, it must be manufactured --- which is precisely what Drop-Upcycling
 does. The rule is symmetric:
@@ -91,19 +91,17 @@ does. The rule is symmetric:
 \emph{Harvest where diversity already exists; upcycle where it does not.}
 \end{quote}
 
-v4 applies both in one model: upcycle the DiT into a diffusion expert pool, harvest the text and
-encoder experts, and route across the union with the same complexity estimator and the same
-Map/Reduce/Route partition. Diffusion and autoregressive generation then differ only in which
-experts a request routes to --- a \textsc{Route} fence does not care what its region computes.
+v4 is specified in~\cite{muen} and not restated here. In outline: it drops the
+$(\text{modality}, \text{tier}, \text{process})$ index that v3 still branches on, so that v3
+becomes v4 restricted to text, one tier, and autoregressive generation. The diffusion line (enso)
+reached that idea from the other side and named it MUEN, Mixture of Unbound Experts; MoDE and MUEN
+are one architecture under two names, reached once from text and once from diffusion, and v4 keeps
+one name and one implementation. The target is enso max.
 
-That union is also a \emph{collapse}. The diffusion line (enso) arrived at the same idea from the
-other side and named it MUEN, Mixture of Unbound Experts; enso then became the routing work itself.
-MoDE and MUEN are one architecture under two names --- route across experts too diverse to have
-been trained together --- reached once from text and once from diffusion. v4 keeps one name and one
-implementation. Perception enters through the same seam: JEPA-family encoders (V-JEPA~2) and the
-jin multimodal framework are \textsc{Route} targets like any other expert, so ``hypermodal'' needs
-no new mechanism --- an encoder is an expert whose modality happens to differ. The target is
-enso max.
+What v3 contributes to it is the seam. Because the class of a region is a property of how it
+composes and not of what it computes (Section~6), a diffusion expert and a text expert are both
+\textsc{Route} for the same reason and the partition cannot distinguish them --- so v4 extends the
+pool without extending the algebra. Getting Section~6 right here is what makes v4 small.
 
 We record v1 rather than quietly drop it. An architecture line that erases its own supersessions
 cannot be audited; the reason v2 exists is legible only against what v1 taught, and v4 is v1's
@@ -450,10 +448,16 @@ existing model that combines these.
 
 Architecture, extraction, and router-training code: \url{https://github.com/zenlm/zen5}.
 Kernel DSL and the Map/Reduce/Route partition: \url{https://github.com/hanzoai/ml}
-(\texttt{hanzo-kernel}). Each harvested source is credited, with its license, in
-\texttt{NOTICE}.
+(\texttt{hanzo-kernel}). v4: \url{https://github.com/hanzoai/muen}. Each harvested source is
+credited, with its license, in \texttt{NOTICE}.
 
 \begin{thebibliography}{9}
+
+\bibitem{muen}
+Zen LM Research, Hanzo AI.
+\emph{MUEN: Multimodal Mixture of Unbound Experts}. MoDE v4.
+\url{https://github.com/hanzoai/muen}
+
 \bibitem{dropupcycling}
 Drop-Upcycling: Training Sparse Mixture of Experts with Partial Re-initialization.
 \url{https://arxiv.org/abs/2502.19261}
