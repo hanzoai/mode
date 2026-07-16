@@ -46,7 +46,9 @@ than a scheduling problem, and that it extends the kernel-fusion algebra by exac
 class. Where the existing algebra classes an operation as \textsc{Map} (composes) or
 \textsc{Reduce} (fences within a device), MoDE adds \textsc{Route} (fences \emph{across}
 devices). The same rule that makes fusion decidable then makes placement decidable.
-Evaluation is in progress; we publish no numbers we have not measured.
+There is no evaluation: no MoDE model has been built, and the premise the architecture rests
+on---that a trained projection makes another family's frozen FFN useful---is itself untested.
+We publish no numbers we have not measured.
 \end{abstract}
 
 \section*{Lineage}
