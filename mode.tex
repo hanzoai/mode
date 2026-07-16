@@ -27,7 +27,9 @@ Harvested from Open Models}
 \maketitle
 
 \begin{abstract}
-We present MoDE v3 (Mixture of Diverse Experts), the architecture underlying zen5. MoDE
+We present MoDE v3 (Mixture of Diverse Experts), the architecture specified for the zen
+model family. It is not deployed: the zen SKUs serve today from upstream open models while
+MoDE is built, and zen5-max is intended to be the first model that runs it. MoDE
 inverts the economics of frontier training: rather than train experts, it \emph{harvests}
 them. Expert modules are extracted from the largest open-weight models available---six
 architecturally distinct families---and served frozen. The only trained parameters are a
@@ -60,8 +62,8 @@ line.
 & \textbf{Name} & \textbf{Where experts come from} & \textbf{Status} \\
 \midrule
 v1 & Mixture of \emph{Distilled} Experts & Upcycled from our own dense checkpoints & Superseded \\
-v2 & Mixture of \emph{Diverse} Experts    & Harvested frozen from open models      & zen5 \\
-v3 & Mixture of \emph{Diverse} Experts    & Harvested frozen; hypermodal; native   & This paper \\
+v2 & Mixture of \emph{Diverse} Experts    & Harvested frozen from open models      & Specified \\
+v3 & Mixture of \emph{Diverse} Experts    & Harvested frozen; hypermodal; native   & This paper; zen5-max \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -76,7 +78,9 @@ one model, but experts drawn from models that were independently trained by diff
 different data, with different attention mechanisms. Upcycling manufactures diversity; harvesting
 finds it already made.
 
-\textbf{v2} established that architecture (zen5): harvest frozen, align, route by complexity.
+\textbf{v2} established that architecture --- harvest frozen, align, route by complexity ---
+and specified it for zen5. It was never built: the reference implementation does not run, and
+the zen5 SKU serves from an upstream model. No MoDE model exists yet.
 \textbf{v3}, this paper, keeps v2's algebra and adds two things: placement as a first-class value
 (Section~5) with the Map/Reduce/Route partition that follows from it (Section~6), and a hypermodal
 router that selects encoders and decoders per modality rather than only FFN experts.
@@ -392,7 +396,9 @@ models' own, and we claim none of them.
 
 \begin{table}[H]
 \centering
-\caption{zen5 configurations. Active parameters are a range because the tier is chosen per request.}
+\caption{Design targets, not shipped models. Active parameters are a range because the tier
+is chosen per request. These SKU names currently serve from upstream open models; zen5-max is
+intended to be the first that runs MoDE.}
 \begin{tabular}{lrll}
 \toprule
 \textbf{Model} & \textbf{Total} & \textbf{Active} & \textbf{Target} \\
@@ -407,12 +413,17 @@ zen5-max   & 3.1T & 0.8--100B+ & Frontier \\
 
 \section{Evaluation}
 
-Evaluation is in progress. Routing accuracy, per-tier latency, crossing rate under real
-traffic, and end-task quality are measured by \texttt{scripts/benchmark.py} in the zen5
-repository and will be reported when the numbers are real. We publish none here. The
-architecture's claims---frontier capability at router-training cost, and sub-unity
-expected crossings per request---are worth testing honestly, and a fabricated table would
-only obscure whether they hold.
+There is no evaluation, because there is nothing yet to evaluate. Routing accuracy,
+per-tier latency, crossing rate under real traffic, and end-task quality require a
+harness that does not exist: the reference implementation in the zen5 repository has
+never been executed, and we do not cite it as one. We publish no numbers here.
+
+Two claims decide whether the architecture holds---frontier capability at
+router-training cost, and sub-unity expected crossings per request---and both rest on a
+premise that has itself never been tested: that a trained projection makes another
+family's frozen FFN useful (Section~3.2). If that premise fails, MoDE as specified does
+not work, and no amount of the rest repairs it. It is the first thing to measure and the
+cheapest to falsify. A fabricated table would only obscure the one question worth asking.
 
 \section{Related Work}
 
@@ -431,7 +442,9 @@ existing model that combines these.
 
 \section*{Availability}
 
-Architecture, extraction, and router-training code: \url{https://github.com/zenlm/zen5}.
+Architecture, extraction, and router-training code: \url{https://github.com/zenlm/zen5}
+(a reference implementation; it does not run, and the native one is being built on the Rust
+stack).
 Kernel DSL and the Map/Reduce/Route partition: \url{https://github.com/hanzoai/ml}
 (\texttt{hanzo-kernel}). The successor line, MUEN: \url{https://github.com/hanzoai/muen}. Each
 harvested source is credited, with its license, in \texttt{NOTICE}.
