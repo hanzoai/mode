@@ -1,5 +1,17 @@
 # MoDE — Mixture of Diverse Experts
 
+| | Name | Where experts come from | Status |
+|---|---|---|---|
+| **v1** | Mixture of *Distilled* Experts | Upcycled from our own dense checkpoints ([Drop-Upcycling](https://arxiv.org/abs/2502.19261)) | superseded |
+| **v2** | Mixture of *Diverse* Experts | Harvested frozen from open models | [zen5](https://github.com/zenlm/zen5) |
+| **v3** | Mixture of *Diverse* Experts | Harvested frozen; hypermodal; Rust-native | this repo |
+
+v1 taught that expert **diversity must be engineered** — identical experts get identical
+gradients and never differentiate. v2 took that to its conclusion: the strongest available
+diversity isn't noise injected into copies of one model, it's experts from models independently
+trained by different groups on different data. *Upcycling manufactures diversity; harvesting
+finds it already made.*
+
 The architecture behind [zen5](https://github.com/zenlm/zen5): route across expert
 modules **harvested frozen** from the largest open-weight models, with
 complexity-aware hierarchical routing that adapts compute to task difficulty.
