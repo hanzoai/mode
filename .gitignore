@@ -1,0 +1,11 @@
+# LaTeX build artifacts — mode.pdf is built from mode.tex, not tracked.
+*.aux
+*.log
+*.out
+*.pdf
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+*.fdb_latexmk
+*.fls

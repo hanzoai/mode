@@ -5,7 +5,7 @@
 | **v1** | Mixture of *Distilled* Experts | Upcycled from our own dense checkpoints ([Drop-Upcycling](https://arxiv.org/abs/2502.19261)) | superseded |
 | **v2** | Mixture of *Diverse* Experts | Harvested frozen from open models | [zen5](https://github.com/zenlm/zen5) |
 | **v3** | Mixture of *Diverse* Experts | Harvested frozen; hypermodal; Rust-native | this repo |
-| **v4** | **DiT-MoDE** | Harvested **and** upcycled (diffusion experts) | planned — [enso](https://github.com/zenlm/enso) max |
+| **v4** | **MUEN** / DiT-MoDE | Harvested **and** upcycled (diffusion experts) | [muen](https://github.com/hanzoai/muen) → [enso](https://github.com/zenlm/enso) max |
 
 v1 taught that expert **diversity must be engineered** — identical experts get identical
 gradients and never differentiate. v2 took that to its conclusion: the strongest available
