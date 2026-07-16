@@ -49,10 +49,12 @@ Evaluation is in progress; we publish no numbers we have not measured.
 
 \section*{Lineage}
 
-MoDE has four versions, and they differ in where the experts come from. This paper is v3.
+MoDE has three versions, and they differ in where the experts come from. v3 completes the
+line.
 
 \begin{table}[H]
 \centering
+\caption{The MoDE line. v1 and v2 established the concepts; v3 completes them.}
 \begin{tabular}{llll}
 \toprule
 & \textbf{Name} & \textbf{Where experts come from} & \textbf{Status} \\
@@ -60,7 +62,6 @@ MoDE has four versions, and they differ in where the experts come from. This pap
 v1 & Mixture of \emph{Distilled} Experts & Upcycled from our own dense checkpoints & Superseded \\
 v2 & Mixture of \emph{Diverse} Experts    & Harvested frozen from open models      & zen5 \\
 v3 & Mixture of \emph{Diverse} Experts    & Harvested frozen; hypermodal; native   & This paper \\
-v4 & MUEN / DiT-MoDE                       & Harvested \emph{and} upcycled (diffusion) & \cite{muen} (enso max) \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -80,32 +81,16 @@ finds it already made.
 (Section~5) with the Map/Reduce/Route partition that follows from it (Section~6), and a hypermodal
 router that selects encoders and decoders per modality rather than only FFN experts.
 
-\textbf{v4} (\emph{MUEN} / DiT-MoDE) returns to v1's technique rather than retiring it, because the
-two methods answer different questions. Harvesting works when an ecosystem has already trained the
-diversity: six independently-trained frontier text families exist, so MoDE takes them. No
-comparable pool of open frontier diffusion-transformer MoEs exists to take. Where diversity has not
-been trained by someone else, it must be manufactured --- which is precisely what Drop-Upcycling
-does. The rule is symmetric:
-
-\begin{quote}
-\emph{Harvest where diversity already exists; upcycle where it does not.}
-\end{quote}
-
-v4 is specified in~\cite{muen} and not restated here. In outline: it drops the
-$(\text{modality}, \text{tier}, \text{process})$ index that v3 still branches on, so that v3
-becomes v4 restricted to text, one tier, and autoregressive generation. The diffusion line (enso)
-reached that idea from the other side and named it MUEN, Mixture of Unbound Experts; MoDE and MUEN
-are one architecture under two names, reached once from text and once from diffusion, and v4 keeps
-one name and one implementation. The target is enso max.
-
-What v3 contributes to it is the seam. Because the class of a region is a property of how it
-composes and not of what it computes (Section~6), a diffusion expert and a text expert are both
-\textsc{Route} for the same reason and the partition cannot distinguish them --- so v4 extends the
-pool without extending the algebra. Getting Section~6 right here is what makes v4 small.
-
 We record v1 rather than quietly drop it. An architecture line that erases its own supersessions
-cannot be audited; the reason v2 exists is legible only against what v1 taught, and v4 is v1's
-technique applied where it is the right one.
+cannot be audited, and the reason v2 exists is legible only against what v1 taught. v1's technique
+is not wrong either --- it is right wherever diversity has \emph{not} already been trained by
+someone else, which is simply not the case for open frontier text models. Where that condition does
+hold, upcycling is the correct method, and it is applied there~\cite{muen}.
+
+MoDE ends here. What follows is not a fourth MoDE but a different line: the diffusion
+work (enso) arrived independently at the idea of routing across experts too diverse to have been
+trained together, and its own v3 generalizes past what MoDE binds. That architecture is
+MUEN~\cite{muen}, and Section~6 is what MoDE contributes to it.
 
 
 \section{Introduction}
@@ -448,14 +433,14 @@ existing model that combines these.
 
 Architecture, extraction, and router-training code: \url{https://github.com/zenlm/zen5}.
 Kernel DSL and the Map/Reduce/Route partition: \url{https://github.com/hanzoai/ml}
-(\texttt{hanzo-kernel}). v4: \url{https://github.com/hanzoai/muen}. Each harvested source is
-credited, with its license, in \texttt{NOTICE}.
+(\texttt{hanzo-kernel}). The successor line, MUEN: \url{https://github.com/hanzoai/muen}. Each
+harvested source is credited, with its license, in \texttt{NOTICE}.
 
 \begin{thebibliography}{9}
 
 \bibitem{muen}
 Zen LM Research, Hanzo AI.
-\emph{MUEN: Multimodal Mixture of Unbound Experts}. MoDE v4.
+\emph{MUEN: Multimodal Mixture of Unbound Experts}. enso v3 (DiT-MoDE).
 \url{https://github.com/hanzoai/muen}
 
 \bibitem{dropupcycling}
