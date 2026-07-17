@@ -1,11 +1,19 @@
 # MoDE — Mixture of Diverse Experts
 
+Route across expert modules **harvested frozen** from the largest open-weight models, with
+complexity-aware hierarchical routing that adapts compute to task difficulty.
+
+**Specified, not built.** No MoDE model exists. The zen SKUs serve today from upstream open
+models; zen5-max is intended to be the first that runs MoDE. This repo publishes the
+architecture and no numbers it has not measured.
+
+## The line
+
 | | Name | Where experts come from | Status |
 |---|---|---|---|
-| **v1** | Mixture of *Distilled* Experts | Upcycled from our own dense checkpoints ([Drop-Upcycling](https://arxiv.org/abs/2502.19261)) | superseded |
-| **v2** | Mixture of *Diverse* Experts | Harvested frozen from open models | [zen5](https://github.com/zenlm/zen5) |
-| **v3** | Mixture of *Diverse* Experts | Harvested frozen; hypermodal; Rust-native | this repo |
-| **v4** | **MUEN** / DiT-MoDE | Harvested **and** upcycled (diffusion experts) | [muen](https://github.com/hanzoai/muen) → [enso](https://github.com/zenlm/enso) max |
+| **v1** | Mixture of *Distilled* Experts | Upcycled from our own dense checkpoints ([Drop-Upcycling](https://arxiv.org/abs/2502.19261)) | Superseded |
+| **v2** | Mixture of *Diverse* Experts | Harvested frozen from open models | Specified; never built |
+| **v3** | Mixture of *Diverse* Experts | Harvested frozen; hypermodal; Rust-native | This repo |
 
 v1 taught that expert **diversity must be engineered** — identical experts get identical
 gradients and never differentiate. v2 took that to its conclusion: the strongest available
@@ -13,47 +21,39 @@ diversity isn't noise injected into copies of one model, it's experts from model
 trained by different groups on different data. *Upcycling manufactures diversity; harvesting
 finds it already made.*
 
-**v4 brings v1 back**, because the two answer different questions. Harvesting works when an
-ecosystem already trained the diversity — six open frontier text families exist, so we take them.
-No comparable pool of open frontier DiT-MoEs exists to take, so there diversity must be
-manufactured. The rule is symmetric:
+v1 is recorded rather than quietly dropped. An architecture line that erases its own
+supersessions cannot be audited, and v1's technique is not wrong — it is right wherever
+diversity has *not* already been trained by someone else, which is simply not the case for open
+frontier text models. The rule is symmetric:
 
 > **Harvest where diversity already exists; upcycle where it does not.**
 
-DiT-MoDE does both in one model: upcycle the DiT into a diffusion expert pool, harvest the text
-and encoder experts, route across the union. Diffusion and autoregressive generation then differ
-only in *which experts a request routes to* — a `Route` fence doesn't care what its region
-computes.
+**MoDE ends at v3.** What follows is not a fourth MoDE but a different line: the diffusion work
+([enso](https://github.com/zenlm/enso)) arrived independently at the same idea — route across
+experts too diverse to have been trained together — and generalizes past what MoDE binds. That
+architecture is **MUEN**, specified in its own repo ([muen](https://github.com/hanzoai/muen));
+Map/Reduce/Route is what MoDE contributes to it.
 
-**It's also a collapse.** The diffusion line ([enso](https://github.com/zenlm/enso)) reached the
-same idea from the other side and called it **MUEN** (Mixture of *Unbound* Experts); enso then
-became the routing work itself. MoDE and MUEN are one architecture under two names — *route across
-experts too diverse to have been trained together* — found once from text, once from diffusion.
-v4 keeps one name and one implementation.
+Perception enters through the same seam: JEPA-family encoders
+([V-JEPA 2](https://github.com/zenlm/vjepa2)) and the jin multimodal framework are `Route`
+targets like any other expert. "Hypermodal" needs no new mechanism — **an encoder is just an
+expert whose modality differs**.
 
-Perception enters through the same seam: JEPA-family encoders ([V-JEPA 2](https://github.com/zenlm/vjepa2))
-and the jin multimodal framework are `Route` targets like any other expert. "Hypermodal" needs no
-new mechanism — **an encoder is just an expert whose modality differs**.
+## Design targets
 
-### enso's own arc
-`diffusion (DiT-MoE)` → `router` → `DiT-MoDE` — it started as diffusion-with-experts, became the
-router, and its final form re-fuses diffusion into the routed architecture. **enso max** is the target.
+Not measurements — nothing here has been built or run.
 
-The architecture behind [zen5](https://github.com/zenlm/zen5): route across expert
-modules **harvested frozen** from the largest open-weight models, with
-complexity-aware hierarchical routing that adapts compute to task difficulty.
+| | |
+|---|---|
+| Expert pool | ~3.1T params, 1000+ experts, 6 text families + vision/video/3D/audio |
+| Trained surface | **~394M (0.013%)** — 207M estimator + 134M alignment + 52M router |
+| Active per request | 0.8B (a greeting) → 100B+ (a proof) |
+| Experts | **Frozen.** Never fine-tuned, never synced, pinned to a device |
 
 **Diverse, not distilled.** Experts are taken as-is from six independently-trained
 model families and never fine-tuned. Their diversity is the point — different groups,
 different data, different attention mechanisms learn different representations, and a
 router can exploit that.
-
-| | |
-|---|---|
-| Expert pool | ~3.1T params, 1000+ experts, 6 text families + vision/video/3D/audio |
-| **Trained** | **~394M (0.013%)** — 207M estimator + 134M alignment + 52M router |
-| Active per request | 0.8B (a greeting) → 100B+ (a proof) |
-| Experts | **Frozen.** Never fine-tuned, never synced, pinned to a device |
 
 ## The two ideas
 
@@ -72,11 +72,11 @@ policy to get wrong.
 MoDE extends the [hanzo-kernel](https://github.com/hanzoai/ml) fusion algebra by exactly
 one class, and the extension is forced rather than designed:
 
-| Class | Locality | Effect |
-|-------|----------|--------|
-| `Map` | index-local, same device | **composes** — fuses into one kernel |
-| `Reduce` | row-local, same device | fences **within** a device (contraction) |
-| `Route` | expert-local, may cross | fences **across** devices (placement) |
+| Class | Locality | Effect | |
+|-------|----------|--------|---|
+| `Map` | index-local, same device | **composes** — fuses into one kernel | implemented |
+| `Reduce` | row-local, same device | fences **within** a device (contraction) | implemented |
+| `Route` | expert-local, may cross | fences **across** devices (placement) | proposed here |
 
 The fuser already partitions a trace at its fences. `Reduce` fences split a kernel;
 `Route` fences split a *device*. Each Map region is then a fused kernel running entirely
@@ -88,11 +88,35 @@ Training uses the identical partition: experts are frozen, so no `Route`-fenced 
 needs a backward pass. The backward graph is the forward graph with every `Route` region
 cut out — which is the algebraic statement of "we train 0.013% of the model."
 
+`Map` and `Reduce` exist today in `hanzo-kernel` (`fuse.rs`), whose fuser already cuts Map
+regions at `Reduce` fences. `Route` is this paper's proposed extension; it is not implemented.
+
+## Routing in this stack
+
+Three routing decisions exist here, at three levels. MoDE adds no new router — it names the
+level the others leave open.
+
+| Level | Where it lives | Decides |
+|---|---|---|
+| request → model | `hanzo-router` (`Classifier`, `RoutePolicy`) | which *model* serves a request |
+| request → tier | MoDE `ComplexityEstimator` | how much *compute* the request warrants |
+| token → expert | `hanzo-kernel` `quant::moe_route` | which *experts* a token activates |
+
+MoDE's tier is the axis `hanzo-router` already calls `Level` (`Fast`/`Balanced`/`Max`), at five
+bands rather than three — chosen there by policy and SLO, predicted here from the prompt's first
+64 tokens. `hanzo-router` already carries the seam for exactly that: `trait Classifier` is
+heuristic today and documented so a learned model can drop in without touching the policy. The
+estimator belongs in that seam. Per-tier expert selection lowers to `quant::moe_route`, the
+fused softmax + top-k + renorm the kernel DSL already ships. One router per level, no third one.
+
 ## Paper
 
 [`mode.tex`](mode.tex) — the architecture, the expert pool, routing, placement, and the
-Map/Reduce/Route partition. Evaluation is in progress and reported when the numbers are
-measured; this paper publishes none it has not.
+Map/Reduce/Route partition. Build with `pdflatex mode.tex`.
+
+**There is no evaluation**, because there is nothing yet to evaluate. The premise the whole
+architecture rests on — that a trained projection makes another family's frozen FFN useful —
+is itself untested. It is the first thing to measure and the cheapest to falsify.
 
 ## Credit
 
