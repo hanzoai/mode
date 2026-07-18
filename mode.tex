@@ -346,8 +346,9 @@ That is a fence, but not a contraction fence. It is a \textbf{placement fence}:
         devices.
 \end{itemize}
 
-\lstset{caption={The proposed class extension; \texttt{hanzo-kernel} implements Map and Reduce
-today. Route is a fence like Reduce, distinguished by what it crosses.}}
+\lstset{caption={The class algebra; \texttt{hanzo-kernel} (0.2.26) implements all three. The
+partitioner asks \texttt{Class::fences()}, so Route---a fence like Reduce, distinguished by
+what it crosses---partitions with no change to the partition logic.}}
 \begin{lstlisting}
 pub enum Class {
     Map,     // index-local  -> composes
@@ -448,9 +449,10 @@ existing model that combines these.
 Architecture, extraction, and router-training code: \url{https://github.com/zenlm/zen5}
 (a reference implementation; it does not run, and the native one is being built on the Rust
 stack).
-Kernel DSL: \url{https://github.com/hanzoai/ml} (\texttt{hanzo-kernel}), which implements
-\textsc{Map} and \textsc{Reduce} and whose fuser already cuts Map regions at \textsc{Reduce}
-fences. \textsc{Route} is this paper's proposed extension and is not implemented.
+Kernel DSL: \url{https://github.com/hanzoai/ml} (\texttt{hanzo-kernel} 0.2.26), which
+implements all three classes; its fuser cuts Map regions at any fence (\texttt{Class::fences()}),
+placement $\pi$ is a value (\texttt{src/place.rs}), and a routed plan reads its cross-device
+crossings off $\pi$ (\texttt{src/route.rs}).
 The successor line, MUEN: \url{https://github.com/hanzoai/muen}. Each
 harvested source is credited, with its license, in \texttt{NOTICE}.
 
